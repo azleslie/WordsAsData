@@ -36,9 +36,11 @@ library("textdata")
 
 ## Review
 
+If you haven't yet, download this lesson at [https://github.com/azleslie/WordsAsData](https://github.com/azleslie/WordsAsData).
+
 Let's review. Programming languages like R distinguish between several data types; these include numeric (e.g. 1, 2, 3), boolean (e.g. TRUE, FALSE), and character (e.g. "n", "s", "v"). A string of characters (e.g. "string", "characters") is called a character string.
 
-In written language, we use strings of characters to represent ideas, but we rely on other patterns that emerge through the aggregation of words to derive further meaning: their order, repetition, and immediate context, the selection of some rather than others, their wider associations. Similarly, quantitative text analysis is primarily concerned with characters, but we'll rely on the other data types in order to represent qualities like order, repetition, context, and so on.
+In written language, we use strings of characters to represent ideas, but we rely on other patterns that emerge through the aggregation of words to derive further meaning: their order, repetition, context, the selection of some rather than others, their wider associations. Similarly, quantitative text analysis is concerned with characters but relies on the other data types in order to represent qualities like order, repetition, context, and so on.
 
 In our previous class, we set up and familiarized ourselves with R and the RStudio environment. We went to [the Gutenberg Project website](http://www.gutenberg.org/) and each found a text to work with - any text, literary or nonliterary, ideally one that you were already familiar with. Next, we went through the process of tidying it. We ended last class with a text organized as a `vector` in which every word (character string that doesn't include a space) is a single `element`. The block of code below is the quick version of this; run it. Then type "word_vector" into the Console in the lower left quadrant of RStudio and press enter to see it.
 ```{r, warning=FALSE}
@@ -65,13 +67,13 @@ Let's warm up with the basic calculations from the end of last class. How many u
 length(unique(word_vector))
 ```
 
-Quantifying broad patterns of word use can reveal a lot about a text right away. We might begin to consider how the text represents gender, for example, by looking at its use of pronouns. `which` elements in our word_vector vector are the character string "her"? `which` searches for an exact character pattern within a vector. `==` signifies "is equal to."
+Broad patterns of word use can reveal a lot about a text. We might begin to consider how a text represents gender, for example, by looking at its use of pronouns. `which` elements in our word_vector vector are "her"? `which` searches for an exact character pattern within a vector; `==` signifies "is equal to."
 ```{r}
 length(which(word_vector=="she"))
 length(which(word_vector=="he"))
 ```
 
-English verbs aren't differentiated quite as reliably by suffix as verbs in other languages, but we can at least get a sense based on usage of basic "to be" conjugations. We can signify "or" with the "or" operator, `|`.
+English verbs aren't differentiated as reliably by suffix as verbs in other languages, but we can get a sense based on usage of basic "to be" conjugations. We can signify "or" with the "or" operator, `|`.
 ```{r}
 length(which(word_vector=="are"))
 length(which(word_vector=="were"))
@@ -80,16 +82,16 @@ length(which(word_vector=="am"|word_vector=="is"))
 length(which(word_vector=="was"))
 ```
 
-*The Grandissimes* is a historical romance with male protagonists, so this makes sense. It would come in handy, however, if we were trying to compare the novel to others or distinguish novels in this genre from those in others. In fact, a lot of predictive modeling in digital humanities boils down to the relative frequencies of common yet vital words like these.
+*The Grandissimes* is a historical romance with mostly male protagonists, so this makes sense. It would come in handy, however, if we were trying to compare the novel to others or distinguish novels in this genre from those in others. In fact, a lot of predictive modeling in digital humanities boils down to the relative frequencies of common yet vital words like these.
 
 ## Structuring Data
 
-Vectors are useful, but by themselves they are somewhat information-poor: they can only store a sequence of individual observations. We often use two-dimensional structures like spreadsheets (like Excel documents), arrays, and other types of tabular formats in order to organize data in a way that is easily intuited for human users and easily processed by computers. In R this format is called a data frame. We can turn a vector into a one-column data frame called "noveldf" with the function `data.frame`, specifying "word" as the column name.
+Vectors are useful, but by themselves they are information-poor: they only store a sequence of individual observations. We use two-dimensional structures like spreadsheets (like Excel documents) or arrays in order to organize data in a way that human users can easily intuit and that computers can easily process. In R this format is called a data frame. We can turn a vector into a one-column data frame called "noveldf" with the assignment operator `<-` and the function `data.frame`, specifying "word" as the column name.
 ```{r}
 noveldf <- data.frame(word=word_vector)
 ```
 
-We can use the `$` operator to refer to just one column of a data frame at a time. Type "noveldf$word" into the Console and click enter. Taken by itself, a single column still functions as a vector.
+The `$` operator specifies just one column of a data frame at a time. Type "noveldf$word" into the Console and click enter. Taken by itself, a single column still functions as a vector.
 
 In a data frame that represents the words of a book, order matters. We can store the position of each word in its own column. The `seq_along` function returns a simple index: a vector of the same length as the input vector where each element is simply the number of its position.
 ```{r}
@@ -98,7 +100,7 @@ noveldf$id <- seq_along(noveldf$word)
 
 To see what a data frame looks like, click on its name in the Environment in the upper right quadrant of RStudio at any time to launch a convenient viewer.
 
-We organize words into groups at several concentric scales - sentences, paragraphs, and chapters - in order to better delineate the ideas they express and help readers better understand. Computers rely on groupings in order to make sense of patterns as well. We split our book into individual words as the smallest atomic unit of meaning (for linguistics or poetics, the atomic unit may be the syllable instead). When treating words as data, we want to reintroduce these groupings wherever possible as new variables.
+We organize words into groups at several concentric scales - sentences, paragraphs, and chapters - to better delineate the ideas they express and help readers better understand. Computers rely on groupings to make sense of patterns as well. We split our book into individual words as the smallest atomic unit of meaning (for linguistics or poetics, the atomic unit may be the syllable instead). When treating words as data, we want to reintroduce these groupings wherever possible as new variables.
 
 A quick look at this copy of *The Grandissimes* shows that chapters always begin with the word "CHAPTER" in all-caps, which appears nowhere else. We can find the position of each new chapter by using `which`.
 ```{r}
@@ -130,7 +132,7 @@ Function    | Use
 
 We'll also use the piping operator, `%>%`, which pipes the output of one function directly into the next: this allows us to make our code clearer and more concise. Think of it like pouring our data through a series of sifters with progressively smaller withes. The introduction of the concept of piping in the early 1970s was a pivotal development in the history of programming because it improved the efficiency and modularity of code.
 
-First, let's rename some variable (column) names with the `rename` function. Note that `<-` is overwriting all_records with the new variable names: without `<-` R would simply print it differently in the console without actually changing all_records.
+First, let's rename some variable (column) names with the `rename` function. Note that `<-` is overwriting noveldf with the new variable names.
 ```{r}
 noveldf <- noveldf %>%
   rename("Position" = "id") %>%
@@ -177,7 +179,7 @@ noveldf <- noveldf %>%
   mutate(CharNum=nchar(Word))
 ```
 
-So far we've explored a number of functions for better structuring our data (with `rename`, `select`, and `arrange`), identifying particular subsets of our data (with `filter`), and even extracting additional variables from the data we already have (with `mutate`). Most analysis, however, involves summarizing data: that is, quantifying particular patterns or tendencies. For this, we'll want to utilize the powerful one-two punch of `group_by` and `summarize`.
+So far we've explored a number of functions for better structuring our data (with `rename`, `select`, and `arrange`), identifying particular subsets of our data (with `filter`), and extracting additional variables from the data we already have (with `mutate`). Most analysis, however, involves summarizing data: that is, quantifying particular patterns or tendencies. For this, we'll want to utilize the powerful one-two punch of `group_by` and `summarize`.
 
 How many times does each word appear? To determine this, we'll group all of our observations by the Author variable (with `group_by`) and then `summarize` the number (`n`) of observations in each group as a new variable, Total.
 ```{r}
@@ -188,7 +190,7 @@ noveldf %>%
 
 `summarize` defaults to alphabetic order. What function would we need to add to our pipe to reorder it by observations?[^2]
 
-Unsurprisingly, the most commonly used words in most texts are, well, a bit boring. In English, in fact, these will almost always be the most common words; this phenomenon is called Zipf's Law. Repetition of this most basic kind in language is important, and deviations between texts can sometimes tell us a lot about style. But we also want to know about distinctiveness.
+Unsurprisingly, the most commonly used words in most texts are, well, a bit boring. In English, in fact, these will almost always be the most common words; this phenomenon is called Zipf's Law. Repetition of this most basic kind in language is important, but we also want to know about distinctiveness.
 
 To remove the static, we'll use a stop list: a list of common words that we don't want gumming up the works (there are plenty of stoplists lying about online). The same `readLines` function used to read in the Gutenberg .txt last class works here too.
 ```{r}
@@ -225,9 +227,9 @@ noveldf %>%
   ggtitle("Most Frequent Words in The Grandissimes")
 ```
 
-Of course, words aren't used evenly throughout a text. They often follow patterns of use, and these patterns can be important. In fiction, we call this narrative time: the time it takes the narrative to unfold, as opposed to the time in which the plot unfolds. When working with philosophical or certain historical texts we might call this argumentative time, and there are equivalent theorizations we could use for other historical or religious texts.
+Of course, words aren't used evenly throughout a text. They follow patterns of use, and these patterns are important. In fiction, we call this narrative time: the time it takes the narrative to unfold, as opposed to the time in which the plot unfolds. When working with philosophical or certain historical texts we might call this argumentative time, and there are equivalent theorizations we could use for other historical or religious texts.
 
-Let's focus on a single important word. You may choose an important character, concept, descriptor, one of the most frequent words that stood out, anything. I'll use the second half of the name Bras Coupé, an enslaved person in *The Grandissimes* whose curse on Louisiana's indigo plantations disrupts the novel. We can use word position as our metric for narrative time. Here I use `geom_bar` because it automatically sets the y axis to 
+Let's focus on a single important word. You may choose an important character, concept, descriptor, or one of the most frequent words that stood out. I'll use the second half of the name Bras Coupé, an enslaved person in *The Grandissimes* whose curse on Louisiana's indigo plantations disrupts the novel. We can use word position as our metric for narrative time. Here I use `geom_bar` because it automatically sets the y axis to the total number of instances per unit on the x axis.
 ```{r, warning=FALSE}
 noveldf %>%
   filter(Word=="coupé") %>%
@@ -238,7 +240,7 @@ noveldf %>%
   xlab("Narrative Time in Words")
 ```
 
-Despite Bras Coupé's decisive impact on *The Grandissimes*, he mostly appears just in one segment of it, aside from some important foreshadowing and build-up. This graph helps us describe this peculiar experience of reading the novel.
+Despite Bras Coupé's decisive impact on *The Grandissimes*, he mostly appears in just one segment of it, aside from some important foreshadowing and build-up. This graph helps us describe this peculiar experience of reading the novel.
 
 We can get a complementary view on the same by measuring with chapters.
 ```{r}
@@ -272,7 +274,7 @@ noveldf.pronouns %>%
   ggtitle("Pronoun Use in The Grandissimes")
 ```
 
-What's striking here is that while "he" appears much more frequently in *The Grandissimes* overall, there are numerous chapters in which "she" is much more common. Reusing our code from the start of today, we can find the average ratio of first person male pronouns to first person female pronouns:
+What's striking here is that while "he" appears much more frequently in *The Grandissimes* overall, there are numerous chapters in which "she" is more common. Reusing our code from the start of today, we can find the average ratio of first person male pronouns to first person female pronouns:
 ```{r}
 length(which(noveldf$Word=="he")) / length(which(noveldf$Word=="she"))
 ```
@@ -285,7 +287,7 @@ noveldf.pronouns %>%
   arrange(desc(H.Over.S))
 ```
 
-As it turns out, very few chapters in *The Grandissimes* have pronoun ratios that come close to the overall ratio. As these calculations suggest, one could produce very different interpretations of gender in the novel simply based on the chapters from which they sourced examples.
+As it turns out, very few chapters in *The Grandissimes* have pronoun ratios that come close to the overall ratio. As these calculations suggest, one could produce very different interpretations of gender in the novel simply based on the chapters from which they sourced examples. Moving between scales of data, like moving between qualitative and quantitative approaches to words, allows us to further develop or re-evaluate our conclusions.
 
 ## Sentiment Analysis
 

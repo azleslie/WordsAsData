@@ -1,0 +1,383 @@
+---
+title: "Words as Data, Day 2"
+author: "[Alex Zweber Leslie](https://azleslie.com/)"
+date: "2/22/2021"
+output:
+  html_document:
+    df_print: paged
+    toc: yes
+editor_options: 
+  chunk_output_type: console
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+if (!(require(dplyr))) {
+  install.packages("dplyr", repos = "http://cran.us.r-project.org")
+}
+if (!(require(tidyr))) {
+  install.packages("tidyr", repos = "http://cran.us.r-project.org")
+}
+if (!(require(ggplot2))) {
+  install.packages("ggplot2", repos = "http://cran.us.r-project.org")
+}
+if (!(require(tidytext))) {
+  install.packages("tidytext", repos = "http://cran.us.r-project.org")
+}
+if (!(require(textdata))) {
+  install.packages("textdata", repos = "http://cran.us.r-project.org")
+}
+library("dplyr")
+library("tidyr")
+library("ggplot2")
+library("tidytext")
+library("textdata")
+```
+
+## Review
+
+Let's review. Programming languages like R distinguish between several data types; these include numeric (e.g. 1, 2, 3), boolean (e.g. TRUE, FALSE), and character (e.g. "n", "s", "v"). A string of characters (e.g. "string", "characters") is called a character string.
+
+In written language, we use strings of characters to represent ideas, but we rely on other patterns that emerge through the aggregation of words to derive further meaning: their order, repetition, and immediate context, the selection of some rather than others, their wider associations. Similarly, quantitative text analysis is primarily concerned with characters, but we'll rely on the other data types in order to represent qualities like order, repetition, context, and so on.
+
+In our previous class, we set up and familiarized ourselves with R and the RStudio environment. We went to [the Gutenberg Project website](http://www.gutenberg.org/) and each found a text to work with - any text, literary or nonliterary, ideally one that you were already familiar with. Next, we went through the process of tidying it. We ended last class with a text organized as a `vector` in which every word (character string that doesn't include a space) is a single `element`. The block of code below is the quick version of this; run it. Then type "word_vector" into the Console in the lower left quadrant of RStudio and press enter to see it.
+```{r, warning=FALSE}
+gutenberg_file <- readLines("sample_texts/grandissimes.txt", encoding = "UTF-8")
+
+start <- which(gutenberg_file=="CHAPTER I")
+end <- which(gutenberg_file==
+              "End of Project Gutenberg's The Grandissimes, by George Washington Cable")
+text <- gutenberg_file[start:(end-1)]
+
+text <- paste(text, collapse=" ")
+
+word_vector <- strsplit(text, "\\W+")
+word_vector <- unlist(word_vector)
+
+word_vector <- gsub("_", "", word_vector)
+word_vector <- word_vector[!(word_vector=="")]
+```
+
+I'll be using George Washington Cable's important 1879 Louisiana novel *The Grandissimes* for my examples. 
+
+Let's warm up with the basic calculations from the end of last class. How many unique words are there in our text? In other words, what is the `length` of the vector of `unique` elements in word_vector? We'll wrap the first function we want R to carry out, `unique`, in the second, `length`. This is called nesting functions.
+```{r}
+length(unique(word_vector))
+```
+
+Quantifying broad patterns of word use can reveal a lot about a text right away. We might begin to consider how the text represents gender, for example, by looking at its use of pronouns. `which` elements in our word_vector vector are the character string "her"? `which` searches for an exact character pattern within a vector. `==` signifies "is equal to."
+```{r}
+length(which(word_vector=="she"))
+length(which(word_vector=="he"))
+```
+
+English verbs aren't differentiated quite as reliably by suffix as verbs in other languages, but we can at least get a sense based on usage of basic "to be" conjugations. We can signify "or" with the "or" operator, `|`.
+```{r}
+length(which(word_vector=="are"))
+length(which(word_vector=="were"))
+
+length(which(word_vector=="am"|word_vector=="is"))
+length(which(word_vector=="was"))
+```
+
+*The Grandissimes* is a historical romance with male protagonists, so this makes sense. It would come in handy, however, if we were trying to compare the novel to others or distinguish novels in this genre from those in others. In fact, a lot of predictive modeling in digital humanities boils down to the relative frequencies of common yet vital words like these.
+
+## Structuring Data
+
+Vectors are useful, but by themselves they are somewhat information-poor: they can only store a sequence of individual observations. We often use two-dimensional structures like spreadsheets (like Excel documents), arrays, and other types of tabular formats in order to organize data in a way that is easily intuited for human users and easily processed by computers. In R this format is called a data frame. We can turn a vector into a one-column data frame called "noveldf" with the function `data.frame`, specifying "word" as the column name.
+```{r}
+noveldf <- data.frame(word=word_vector)
+```
+
+We can use the `$` operator to refer to just one column of a data frame at a time. Type "noveldf$word" into the Console and click enter. Taken by itself, a single column still functions as a vector.
+
+In a data frame that represents the words of a book, order matters. We can store the position of each word in its own column. The `seq_along` function returns a simple index: a vector of the same length as the input vector where each element is simply the number of its position.
+```{r}
+noveldf$id <- seq_along(noveldf$word)
+```
+
+To see what a data frame looks like, click on its name in the Environment in the upper right quadrant of RStudio at any time to launch a convenient viewer.
+
+We organize words into groups at several concentric scales - sentences, paragraphs, and chapters - in order to better delineate the ideas they express and help readers better understand. Computers rely on groupings in order to make sense of patterns as well. We split our book into individual words as the smallest atomic unit of meaning (for linguistics or poetics, the atomic unit may be the syllable instead). When treating words as data, we want to reintroduce these groupings wherever possible as new variables.
+
+A quick look at this copy of *The Grandissimes* shows that chapters always begin with the word "CHAPTER" in all-caps, which appears nowhere else. We can find the position of each new chapter by using `which`.
+```{r}
+chapter_breaks <- which(noveldf$word=="CHAPTER")
+```
+
+We'll stick to chapters today, but sentences, lines, or paragraphs might be equally important. What would we need to do to identify sentence breaks? Paragraph breaks?[^1]
+
+Next, the very handy function `findInterval` can tell us the position of the largest value in one vector (of chapter breaks) that each value of another vector (of word positions) is greater than.
+```{r}
+noveldf$chapter <- findInterval(noveldf$id, chapter_breaks)
+```
+
+## Basic Operations
+
+Now that we're a bit more comfortable with the structure of the data frame in R, it's time to learn how to make use of it. The `dplyr` package gives us seven basic functions for organizing and analyzing data frames.
+
+Function    | Use
+------------|--------------------------------------------
+`rename`    | Rename a variable (column), new title = old title
+`select`    | Select variables (columns) to include / exclude (with `-`)
+`arrange`   | Arrange the order of observations, adding `desc` for descending order
+`filter`    | Filter observations (rows) based on their values for a specified variable (using `<`, `>`, `==`, or `!=`)
+`group_by`  | Put observations into groups by their values in a specified variable, for a subsequent `summarize` call
+`summarize` | Summarize data by groups, based on preceding `group_by` call, one row for each group
+`mutate`    | Create a new variable in a data frame by mutating existing variable(s), new variable = mutation operation
+
+\newline
+
+We'll also use the piping operator, `%>%`, which pipes the output of one function directly into the next: this allows us to make our code clearer and more concise. Think of it like pouring our data through a series of sifters with progressively smaller withes. The introduction of the concept of piping in the early 1970s was a pivotal development in the history of programming because it improved the efficiency and modularity of code.
+
+First, let's rename some variable (column) names with the `rename` function. Note that `<-` is overwriting all_records with the new variable names: without `<-` R would simply print it differently in the console without actually changing all_records.
+```{r}
+noveldf <- noveldf %>%
+  rename("Position" = "id") %>%
+  rename("Word" = "word") %>%
+  rename("Chapter" = "chapter")
+```
+
+All the piping operator does in those previous lines is tell the next function that we're still working with the noveldf data frame. If we wanted to, we could achieve the exact same result by writing out each `rename` call separately: even with just three basic operations you can see the added redundancy. (As it is, these lines won't run because we've already changed the variable names.)
+```{r, eval=FALSE}
+noveldf <- rename(noveldf, "Position" = "id")
+noveldf <- rename(noveldf, "Word" = "word")
+noveldf <- rename(noveldf, "Chapter" = "chapter")
+```
+
+Right now, noveldf is arranged by the order in which each word appears in the book. That's swell, but we may wish to change that. This is where the `arrange` function comes in.
+```{r}
+novel.alphabetized <- noveldf %>%
+  arrange(Word)
+```
+
+We can remove any variables we don't want by using a negative operator `!` with `select`.
+```{r}
+novel.minus.position <- noveldf %>%
+  select(!Position)
+```
+
+`select` is only for selecting variables/columns. When we want to identify observations/rows, however, we `filter`. `filter` is handy when working with numeric data. Here, for example, we can filter out all observations in the first half of *The Grandissimes*:
+```{r}
+novel.firsthalf <- noveldf %>%
+  filter(Chapter < 31)
+```
+
+## Summarizing Data
+
+We can also systematically transform, or mutate, values within the data frame. For this we'll use `mutate`, a function that will allow us to declare a new variable for every observation within the data frame based on an existing variable. As with `rename`, the new variable comes first and the existing one comes second. Since R is case sensitive by default, it is useful to use `tolower` to put all characters into lower case.
+```{r}
+noveldf <- noveldf %>%
+  mutate(Word=tolower(Word))
+```
+
+We can also use `mutate` to generate new information, such as the number of characters, `nchar`, per word.
+```{r}
+noveldf <- noveldf %>%
+  mutate(CharNum=nchar(Word))
+```
+
+So far we've explored a number of functions for better structuring our data (with `rename`, `select`, and `arrange`), identifying particular subsets of our data (with `filter`), and even extracting additional variables from the data we already have (with `mutate`). Most analysis, however, involves summarizing data: that is, quantifying particular patterns or tendencies. For this, we'll want to utilize the powerful one-two punch of `group_by` and `summarize`.
+
+How many times does each word appear? To determine this, we'll group all of our observations by the Author variable (with `group_by`) and then `summarize` the number (`n`) of observations in each group as a new variable, Total.
+```{r}
+noveldf %>%
+  group_by(Word) %>%
+  summarize(Total=n())
+```
+
+`summarize` defaults to alphabetic order. What function would we need to add to our pipe to reorder it by observations?[^2]
+
+Unsurprisingly, the most commonly used words in most texts are, well, a bit boring. In English, in fact, these will almost always be the most common words; this phenomenon is called Zipf's Law. Repetition of this most basic kind in language is important, and deviations between texts can sometimes tell us a lot about style. But we also want to know about distinctiveness.
+
+To remove the static, we'll use a stop list: a list of common words that we don't want gumming up the works (there are plenty of stoplists lying about online). The same `readLines` function used to read in the Gutenberg .txt last class works here too.
+```{r}
+stoplist <- readLines("https://algs4.cs.princeton.edu/35applications/stopwords.txt")
+```
+
+Now we'll `filter` to exclude (with the negative operator `!`) all the values in noveldf$Word that are also `%in%` the stoplist. This is our longest single stretch of code so far; before running it, try speaking it as a sentence one line at a time. (Tips: start with something like "First we take noveldf," say something like "then we" when you see `%>%`, and if it helps add clarification like "the values in the Word column" instead of just "Word"). Programming languages are languages: lean into this fact.
+```{r}
+noveldf %>%
+  filter(!(Word %in% stoplist)) %>%
+  group_by(Word) %>%
+  summarize(Total=n()) %>%
+  arrange(desc(Total))
+```
+
+This is much better, but our stoplist leaves something to be desired; it doesn't include single letters, and it also doesn't cover dialect equivalents like "de." How could we remove these from the results?[^3]
+
+## Word Frequency and Position
+
+R allows for easy transitions from analysis to visualization without switching software, changing files, or redoing work. With just a couple additions to our code above (the addition of `top_n` to limit results to the top 20), we can plot results with `ggplot`. This function requires columns from a dataframe for x and y values; we'll also `reorder` Word by the Total number of uses rather than the default alphabetical order. `geom_col` specifies that the plot will be a column plot, and the final two lines of code are purely aesthetic.
+```{r}
+noveldf %>%
+  filter(!(Word %in% stoplist)) %>%
+  filter(CharNum > 2) %>%
+  group_by(Word) %>%
+  summarize(Total=n()) %>%
+  top_n(20, Total) %>%
+  
+  ggplot(aes(x=Total, y=reorder(Word, Total))) +
+  geom_col() +
+  
+  theme(plot.title = element_text(face="bold", size=rel(1.5))) +
+  ylab("Word") +
+  ggtitle("Most Frequent Words in The Grandissimes")
+```
+
+Of course, words aren't used evenly throughout a text. They often follow patterns of use, and these patterns can be important. In fiction, we call this narrative time: the time it takes the narrative to unfold, as opposed to the time in which the plot unfolds. When working with philosophical or certain historical texts we might call this argumentative time, and there are equivalent theorizations we could use for other historical or religious texts.
+
+Let's focus on a single important word. You may choose an important character, concept, descriptor, one of the most frequent words that stood out, anything. I'll use the second half of the name Bras Coupé, an enslaved person in *The Grandissimes* whose curse on Louisiana's indigo plantations disrupts the novel. We can use word position as our metric for narrative time. Here I use `geom_bar` because it automatically sets the y axis to 
+```{r, warning=FALSE}
+noveldf %>%
+  filter(Word=="coupé") %>%
+  ggplot(aes(x=Position)) +
+  geom_bar(width=200) +
+  theme(plot.title = element_text(face="bold", size=rel(1.5))) +
+  ggtitle("Mentions of Bras Coupé in The Grandissimes") +
+  xlab("Narrative Time in Words")
+```
+
+Despite Bras Coupé's decisive impact on *The Grandissimes*, he mostly appears just in one segment of it, aside from some important foreshadowing and build-up. This graph helps us describe this peculiar experience of reading the novel.
+
+We can get a complementary view on the same by measuring with chapters.
+```{r}
+noveldf %>%
+  filter(Word=="coupé") %>%
+  ggplot(aes(x=Chapter)) +
+  geom_bar() +
+  theme(plot.title = element_text(face="bold", size=rel(1.5))) +
+  ggtitle("Mentions of Bras Coupé in The Grandissimes") +
+  xlab("Narrative Time in Chapters")
+```
+
+In the plot viewer, click the back arrow. What's the difference between these two graphs? Looking at chapters rather than words reminds us that readers experience texts in multiple ways. Bras Coupé either disrupts *The Grandissimes* just before the halfway mark or just after it, and that could be a meaningful distinction.
+
+Visualization can help identify new areas for analysis as well. This time we'll filter two words using the "or" operator, `|`. We can group observations twice, first by chapter and then, within each chapter group, by word. Once you've run this code, type the name of the new data frame, "noveldf.pronouns," into the Console and click enter to see what it looks like.
+```{r, message=FALSE}
+noveldf.pronouns <- noveldf %>%
+  filter(Word=="he"|Word=="she") %>%
+  group_by(Chapter, Word) %>%
+  summarize(Total=n())
+
+noveldf.pronouns
+```
+
+And now for plotting. To keep track of a categorical variable (like Word), add a `fill=` value to the `ggplot` aesthetics.[^4]
+```{r}
+noveldf.pronouns %>%
+  ggplot(aes(x=Chapter, y=Total, fill=Word)) +
+  geom_col() +
+  theme(plot.title = element_text(face="bold", size=rel(1.5))) +
+  ggtitle("Pronoun Use in The Grandissimes")
+```
+
+What's striking here is that while "he" appears much more frequently in *The Grandissimes* overall, there are numerous chapters in which "she" is much more common. Reusing our code from the start of today, we can find the average ratio of first person male pronouns to first person female pronouns:
+```{r}
+length(which(noveldf$Word=="he")) / length(which(noveldf$Word=="she"))
+```
+
+To calculate the pronouns ratio for each chapter, we'll need to reorganize the noveldf.pronouns data frame so that each chapter is just one observation/row with separate variables for each pronoun (instead of two rows for each chapter, one for each pronoun). `pivot_wider` does this: it turns values from one column - here, "Word" - into their own columns ("he" and "she") that are filled with values from another column - here, "Total". Then `mutate` makes a new column, "H.Over.S," by dividing the value in the "he" column for each chapter by the value in the corresponding "she" column.
+```{r, warning=FALSE}
+noveldf.pronouns %>%
+  pivot_wider(names_from=Word, values_from=Total, values_fill=0) %>%
+  mutate(H.Over.S=he/she) %>%
+  arrange(desc(H.Over.S))
+```
+
+As it turns out, very few chapters in *The Grandissimes* have pronoun ratios that come close to the overall ratio. As these calculations suggest, one could produce very different interpretations of gender in the novel simply based on the chapters from which they sourced examples.
+
+## Sentiment Analysis
+
+We're using the `tidytext` and `textdata` packages, which provide a few datasets for this purpose. For starters, type `get_sentiments(nrc)` into the console. (R will ask if you want to download this; type "1" and Enter to agree.)
+```{r}
+get_sentiments("nrc")
+```
+
+Each observation/row here corresponds to a single word, as we can see from the word variable/column. We have access to three sentiment lexicons. The first, "nrc," associates words with a particular affect or emotion; as you can see in the sentiment variable, a word can be associated with multiple sentiments in the "nrc" lexicon. The "bing" lexicon, by contrast, assigns each word either "positive" or "negative" sentiment. Finally, the "afinn" lexicon scores each word between -5 and 5.
+
+Joining two data frames with a common variable - in this case, the word variable - is an important technique. There are several ways to join, and we want the one that retains all the observations/rows of noveldf and adds values from the nrc lexicon only for words in noveldf. So long as we keep that order, `left_join` is the ticket. This function requires a third value specifying the column to join `by`: since the column is spelled differently in each data frame, we need to translate a bit.
+```{r}
+nrc.noveldf <- left_join(noveldf, get_sentiments("nrc"), by=c("Word"="word"))
+```
+
+I've chosen fear, but you can pick whichever sentiment you'd like by changing the `filter`.
+```{r}
+nrc.noveldf %>%
+  filter(sentiment=="fear") %>%
+  group_by(Word) %>%
+  summarize(Total=n()) %>%
+  top_n(10, Total) %>%
+  ggplot(aes(x=Total, y=reorder(Word, Total))) +
+  geom_col() +
+  theme(plot.title = element_text(face="bold", size=rel(1.5))) +
+  ggtitle("Frequent Fears in The Grandissimes") +
+  ylab("Word")
+```
+
+What are your initial reactions?
+
+Sentiment analysis is only as useful as the lexicon used, and a lexicon that is useful for one text might not be for another. To check this, we might want to spot check to see that sentiments are being assigned in a way that we deem appropriate.
+
+This chart takes the entire text as its basis. But one might rather want to know the sentiment of one part of a text or compare how it shifts from one part of the text to the next - for example, from chapter to chapter. This time, we'll `left_join` with the "bing" lexicon to just track whether a word is positive or negative.
+```{r}
+bing.noveldf <- left_join(noveldf, get_sentiments("bing"), by=c("Word"="word"))
+```
+
+This next bit of code is almost exactly like the code for comparing pronouns by chapter above, except now everything happens in one go.
+```{r, message=FALSE}
+bing.noveldf %>%
+  group_by(Chapter, sentiment) %>%
+  summarize(Total=n()) %>%
+  filter(sentiment!="NA") %>%
+  pivot_wider(names_from=sentiment, values_from=Total) %>%
+  mutate(Positivity=positive-negative) %>%
+  ggplot(aes(x=Chapter, y=Positivity)) +
+  geom_col() +
+  theme(plot.title = element_text(face="bold", size=rel(1.5))) +
+  ggtitle("Mood in The Grandissimes")
+```
+
+Now this gives us a lot to chew over. *The Grandissimes* is unusually gloomy for an unusually large amount of its second half despite being generally chipper for the first half. The novel's resolution barely gets into positive territory, and only at the last minute. This makes *The Grandissimes* somewhat unusual, despite the fact that it does indeed possess love plots and resolution of conflict -- formal attributes that might lead one to mistakenly consider the novel simply another example of the postbellum historical romance.
+
+Note that if we saw just this plot, we might not have recognized the variability of sentiment assignment. We might want to compare different sentiment lexicons: for example, we could make a second version of this same graph that instead uses the "afinn" lexicon and compare the results. This kind of self-review is essential when working with quantitative methods.
+
+There's a bigger moral here too: quantitative analysis should always be in dialogue with other qualitative forms of analysis. The benefits of quantitative analysis lie in its ability to articulate aspects of texts that can often be more precise or succinct than qualitative analysis and to direct our attention to further areas for qualitative analysis that we might've overlooked.
+
+Your homework for this week asks you to use these same functions to answer similar questions on word frequency and position. In our next class, we'll explore another aspect of words as data: word contexts and part of speech tagging.
+
+
+
+
+[^1]:Sentences end with punctuation; line breaks separate paragraphs. We removed these last class, but we could go back and rewrite the code to `strsplit` the text document into words. Instead of splitting by non-word characters (`\\W+`), split by concluding punctuation:
+    ```{r}
+    strsplit("The dog. He ran! Real fast? Real fast. ", "\\. |\\? |\\! ")
+    ```
+    Since Gutenberg files use empty lines between paragraphs, searching for `which` elements are `""`.
+
+[^2]:Add this line, after a piping operator (using `desc` to order by descending values):
+    ```{r, eval=FALSE}
+    arrange(desc(Total))
+    ```
+
+[^3]:There are two ways to solve this problem. The first would be to add new elements to the stoplist vector using the basic `c` concatenation function from last class:
+    ```{r, eval=FALSE}
+    stoplist <- c(stoplist, "a", "i", "s")
+    ```
+    A second approach utilizes more of our word data. 
+    ```{r, eval=FALSE}
+    filter(CharNum > 2)
+    ```
+
+[^4]:Because the categorical variable here (Word) is stacked, it isn't suitable for all purposes of comparison. Try editing the `geom_col` line to produce side-by-side columns for each chapter:
+    ```{r, eval=FALSE}
+      geom_col(position="dodge") +
+    ```
+    Or put layer them with transparency:
+    ```{r, eval=FALSE}
+      geom_col(position="identity", alpha=.7) +
+    ```
+    Or remove `fill=Word` from `ggplot` and add this line anywhere after it instead to create side-by-side graphs:
+    ```{r, eval=FALSE}
+      facet_wrap(~Word) +
+    ```
